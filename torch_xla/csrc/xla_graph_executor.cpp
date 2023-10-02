@@ -141,8 +141,9 @@ void XLAGraphExecutor::DeviceContextArena::SaveGraphAsString(
     torch::lazy::hash_t hash, absl::Span<const XLATensorPtr> tensors,
     const std::vector<size_t>* indices, DebugUtil::GraphFormat format) {
   static bool should_save_graph =
-      runtime::sys_util::GetEnvOrdinalPath("XLA_SAVE_TENSORS_FILE", "",
-                                           GetCurrentDevice().ordinal()) != "";
+      runtime::sys_util::GetEnvOrdinalPath(
+          "XLA_SAVE_TENSORS_FILE", "", bridge::GetCurrentDevice().ordinal()) !=
+      "";
   if (should_save_graph &&
       hash_to_graph_map.find(hash) == hash_to_graph_map.end()) {
     hash_to_graph_map[hash] =
@@ -332,7 +333,7 @@ std::string XLAGraphExecutor::DumpHloComputation(
     }
   }
   return !ir_values.empty()
-             ? DumpUtil::ToHlo(ir_values, GetCurrentDevice(), mode)
+             ? DumpUtil::ToHlo(ir_values, bridge::GetCurrentDevice(), mode)
              : std::string();
 }
 
@@ -456,8 +457,8 @@ torch::lazy::hash_t XLAGraphExecutor::GetGraphHash(
 void XLAGraphExecutor::MaybeDumpGraph(std::string name,
                                       torch::lazy::hash_t hash) {
   thread_local const std::string save_file =
-      runtime::sys_util::GetEnvOrdinalPath("XLA_SAVE_TENSORS_FILE", "",
-                                           GetCurrentDevice().ordinal());
+      runtime::sys_util::GetEnvOrdinalPath(
+          "XLA_SAVE_TENSORS_FILE", "", bridge::GetCurrentDevice().ordinal());
   if (!save_file.empty()) {
     std::string graph = DeviceContextArena::Get()->GetGraphByHash(hash);
     if (graph.size() == 0) {
@@ -492,9 +493,9 @@ void XLAGraphExecutor::ClearPendingIrs(
         } else {
           xla::Shape shape = MakeShapeWithDeviceLayout(
               tensors[i]->shape(), static_cast<XlaDeviceType>(device.type()));
-          torch::lazy::BackendDataPtr handle = WrapXlaData(
+          torch::lazy::BackendDataPtr handle =
               runtime::GetComputationClient()->CreateDataPlaceholder(
-                  device.toString(), std::move(shape)));
+                  device.toString(), std::move(shape));
           tensors[i]->data()->handle = handle;
           TF_VLOG(4) << "Replacing the IR " << ir_value.node.get()->ToString()
                      << " of Tensor with ID " << tensors[i]->GetUniqueId()
@@ -651,8 +652,8 @@ XLAGraphExecutor::ExecuteComputationWithBarrier(
   } else {
     for (const xla::Shape& shape : *output_shapes) {
       torch::lazy::BackendDataPtr handle =
-          WrapXlaData(runtime::GetComputationClient()->CreateDataPlaceholder(
-              device.toString(), std::move(shape)));
+          runtime::GetComputationClient()->CreateDataPlaceholder(
+              device.toString(), std::move(shape));
       placeholders.push_back(handle);
     }
   }
@@ -812,11 +813,7 @@ std::vector<torch::lazy::BackendDataPtr> XLAGraphExecutor::ExecuteStablehlo(
       runtime::GetComputationClient()->ExecuteComputation(
           *computations[0], UnwrapXlaData(arguments), device.toString());
 
-  std::vector<torch::lazy::BackendDataPtr> result_backend_data;
-  for (const auto data : result_data) {
-    result_backend_data.push_back(WrapXlaData(data));
-  }
-  return result_backend_data;
+  return WrapXlaData(result_data);
 }
 
 std::vector<at::Tensor> XLAGraphExecutor::GetTensorsOpByOp(
@@ -1042,8 +1039,8 @@ void XLAGraphExecutor::ExtractIRAndPrepareXlaData_(
     xla::Shape shape = MakeShapeWithDeviceLayout(
         tensor->shape(), static_cast<XlaDeviceType>(tensor_device.type()));
     torch::lazy::BackendDataPtr handle =
-        WrapXlaData(runtime::GetComputationClient()->CreateDataPlaceholder(
-            tensor_device.toString(), std::move(shape)));
+        runtime::GetComputationClient()->CreateDataPlaceholder(
+            tensor_device.toString(), std::move(shape));
     tensor_data_vec.push_back(handle);
     if (tensor->CurrentDataHandle() == nullptr && config.force_ltc_data) {
       tensor->AssignIrValue(torch::lazy::Value());
@@ -1259,7 +1256,10 @@ XLAGraphExecutor::BuildInputOutputAliases(
         size_t output_index = it->second;
         xla::XlaOp root = lowering_ctx->GetResult(output_index);
         const xla::Shape& root_shape = ShapeHelper::ShapeOfXlaOp(root);
-        auto parameter_data_shape = UnwrapXlaData(parameters_data[i])->shape();
+        auto parameter_data_shape =
+            std::dynamic_pointer_cast<runtime::ComputationClient::Data>(
+                parameters_data[i])
+                ->shape();
         // Need to check whether existing buffer and the new value has the same
         // shape and the existing buffer has not been aliased before aliasing
         // the existing and new buffer.
@@ -1268,7 +1268,8 @@ XLAGraphExecutor::BuildInputOutputAliases(
         // get sharding for the parameter data
         std::optional<xla::OpSharding> parameter_sharding =
             torch_xla::runtime::GetComputationClient()->GetDataSharding(
-                UnwrapXlaData(parameters_data[i]));
+                std::dynamic_pointer_cast<runtime::ComputationClient::Data>(
+                    parameters_data[i]));
         // get sharding for output tensor
         size_t output_tensor_index = indices[output_index];
         XLATensor::ShardingSpecPtr output_sharding =

@@ -60,6 +60,7 @@ cc_library(
     ":sys_util",
     ":types",
     ":util",
+    "//torch_xla/csrc:device",
     "@tsl//tsl/platform:stacktrace_handler",
     "@xla//xla:literal_util",
     "@xla//xla/client:xla_computation",
