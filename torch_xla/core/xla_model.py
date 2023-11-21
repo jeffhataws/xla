@@ -610,11 +610,13 @@ def all_gather(value, dim=0, groups=None, output=None, pin_layout=True):
     total = 0
     tensor_bucket = []
     out_tensors = []
-    bucket_cap = int(os.getenv(
-                      "ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB",
-                      _ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB
-                    )) * 1024 * 1024
-    divisor = len(groups[0]) if type(groups[0]) == list else len(groups)
+    bucket_cap = int(
+        os.getenv("ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB",
+                  _ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB)) * 1024 * 1024
+    if groups:
+      divisor = len(groups[0]) if type(groups[0]) == list else len(groups)
+    else:
+      divisor = xrt_world_size()
     bucket_cap = bucket_cap / divisor
     for tensor in value:
       tensor_bytes = tensor.numel() * tensor.element_size()
