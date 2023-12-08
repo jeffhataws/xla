@@ -36,6 +36,7 @@ xla::XlaOp TokenHandler::GetInput(xla::XlaOp input,
                                   const xla::Shape* input_shape) {
   static bool disable_numeric_token =
       runtime::sys_util::GetEnvBool("DISABLE_NUMERIC_CC_TOKEN", false);
+  std::cout << "TokenHandler::GetInput: DISABLE_NUMERIC_CC_TOKEN=" << disable_numeric_token << std::endl;
   if (disable_numeric_token) {
     return input;
   }
@@ -50,6 +51,7 @@ xla::XlaOp TokenHandler::GetInput(xla::XlaOp input,
 xla::XlaOp TokenHandler::GetNewToken(xla::XlaOp result) {
   static bool disable_numeric_token =
       runtime::sys_util::GetEnvBool("DISABLE_NUMERIC_CC_TOKEN", false);
+  std::cout << "TokenHandler::GetNewToken: DISABLE_NUMERIC_CC_TOKEN=" << disable_numeric_token << std::endl;
   if (disable_numeric_token) {
     return token_;
   }
