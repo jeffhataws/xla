@@ -581,6 +581,7 @@ def all_gather(value, dim=0, groups=None, output=None, pin_layout=True):
   # Now the input should be a list of Tensors.
   elif isinstance(value, list) and all(
       isinstance(v, torch.Tensor) for v in value):
+
     def _all_gather_coalesced(tensor_list):
       if pin_layout:
         raise RuntimeError(
@@ -601,9 +602,8 @@ def all_gather(value, dim=0, groups=None, output=None, pin_layout=True):
         torch_xla._XLAC._set_all_reduce_token(devctx.device, new_token)
         return output
 
-      result = torch_xla._XLAC._xla_all_gather_coalesced(tensor_list, token, dim,
-                                                        shard_count, groups or [],
-                                                        pin_layout)
+      result = torch_xla._XLAC._xla_all_gather_coalesced(
+          tensor_list, token, dim, shard_count, groups or [], pin_layout)
       torch_xla._XLAC._set_all_reduce_token(devctx.device, result[-1])
       return result[:-1]
 
@@ -624,7 +624,7 @@ def all_gather(value, dim=0, groups=None, output=None, pin_layout=True):
       # Tensor is larger than bucket_cap, don't bucketize
       if tensor_bytes > bucket_cap:
         # Flush out previous buckets even if they don't fill up
-        if total >= 0.5*bucket_cap or (total + tensor_bytes) > 2*bucket_cap:
+        if total >= 0.5 * bucket_cap or (total + tensor_bytes) > 2 * bucket_cap:
           out_tensors.extend(_all_gather_coalesced(tensor_bucket))
           out_tensors.extend(_all_gather_coalesced([tensor]))
         else:
@@ -652,6 +652,7 @@ def all_gather(value, dim=0, groups=None, output=None, pin_layout=True):
   else:
     raise TypeError("`value` needs to be a Tensor or a list of Tensors, but "
                     f"given {type(value)}.")
+
 
 def all_to_all(value,
                split_dimension,
@@ -852,8 +853,8 @@ def reduce_scatter(reduce_type,
 
     def _reduce_scatter_coalesced(tensor_list, out_tensor_bucket):
       new_token = torch_xla._XLAC._xla_reduce_scatter_coalesced_out(
-        reduce_type, out_tensor_bucket, tensor_list, token, scale, scatter_dim, shard_count,
-        groups or [], pin_layout)
+          reduce_type, out_tensor_bucket, tensor_list, token, scale,
+          scatter_dim, shard_count, groups or [], pin_layout)
       torch_xla._XLAC._set_all_reduce_token(devctx.device, new_token)
       return out_tensor_bucket
 
@@ -861,24 +862,27 @@ def reduce_scatter(reduce_type,
     tensor_bucket = []
     out_tensor_bucket = []
     out_tensors = []
-    bucket_cap = int(os.getenv(
-                      "ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB",
-                      _ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB
-                    )) * 1024 * 1024
+    bucket_cap = int(
+        os.getenv("ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB",
+                  _ALL_GATHER_REDUCE_SCATTER_BUCKET_CAP_MB)) * 1024 * 1024
     for i, tensor in enumerate(input):
       tensor_bytes = tensor.numel() * tensor.element_size()
 
       # Tensor is larger than bucket_cap, don't bucketize
       if tensor_bytes > bucket_cap:
         # Flush out previous buckets even if they don't fill up
-        if total >= 0.5*bucket_cap or (total + tensor_bytes) > 2*bucket_cap:
-          out_tensors.extend(_reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
-          out_tensors.extend(_reduce_scatter_coalesced([tensor], [output[i]] if output else []))
+        if total >= 0.5 * bucket_cap or (total + tensor_bytes) > 2 * bucket_cap:
+          out_tensors.extend(
+              _reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
+          out_tensors.extend(
+              _reduce_scatter_coalesced([tensor],
+                                        [output[i]] if output else []))
         else:
           tensor_bucket.append(tensor)
           if output != None:
             out_tensor_bucket.append(output[i])
-          out_tensors.extend(_reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
+          out_tensors.extend(
+              _reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
         total = 0
         tensor_bucket = []
         continue
@@ -886,7 +890,8 @@ def reduce_scatter(reduce_type,
       # Bucketize till the total spills over
       total += tensor_bytes
       if total > bucket_cap:
-        out_tensors.extend(_reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
+        out_tensors.extend(
+            _reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
         total = tensor_bytes
         tensor_bucket = []
         out_tensor_bucket = []
@@ -896,7 +901,8 @@ def reduce_scatter(reduce_type,
 
     # Flush the last remaining bucket
     if len(tensor_bucket):
-        out_tensors.extend(_reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
+      out_tensors.extend(
+          _reduce_scatter_coalesced(tensor_bucket, out_tensor_bucket))
     return out_tensors
   else:
     raise TypeError("`input` needs to be a Tensor or a list of Tensors, but "
