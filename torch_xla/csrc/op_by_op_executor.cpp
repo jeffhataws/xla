@@ -128,7 +128,9 @@ OpByOpExecutor::BuildOps(c10::ArrayRef<torch::lazy::Value> roots,
     const auto backend_data =
         torch::lazy::getBackend()->GetComputationDataFromNode(node);
     if (backend_data != nullptr) {
-      cxop.device_data = UnwrapXlaData(backend_data);
+      cxop.device_data = {std::dynamic_pointer_cast<
+                  torch_xla::runtime::ComputationClient::Data>(
+                  backend_data)};
       ops_shapes[i] = &cxop.device_data->shape();
       device_data_ops[i] = true;
     } else {
